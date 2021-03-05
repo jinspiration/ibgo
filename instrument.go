@@ -1,16 +1,15 @@
 package ibgo
 
 import (
-	"encoding/json"
-	"errors"
 	"fmt"
 	"time"
 )
 
 type Instrument struct {
-	contract Contract
-	detail   ContractDetail
-	client   *IBClient
+	contract          Contract
+	Detail            ContractDetail
+	client            *IBClient
+	lastHistoricalReq time.Time
 }
 
 func (ins *Instrument) Contract() Contract {
@@ -21,152 +20,247 @@ func (ins *Instrument) ConID() int64 {
 	return ins.contract.ConID
 }
 
+func newInstrument(cd ContractData, c *IBClient) (ins *Instrument) {
+	ins = &Instrument{contract: cd.Contract, Detail: cd.ContractDetail, client: c}
+	return
+}
 func (c *IBClient) NewInstrument(contract Contract) (*Instrument, error) {
-	if contract, err := ensureOneContract(c, contract); err != nil {
+	if contractDataList, err := c.ReqContractDetails(contract); err != nil {
 		return nil, err
+	} else if len(contractDataList) == 0 {
+		return nil, fmt.Errorf("No contract found")
+	} else if len(contractDataList) != 1 {
+		return nil, fmt.Errorf("There is ambiguity in the contract defination. Use IBClient.ReqSymbolSample method to look up")
 	} else {
-		return &Instrument{contract: contract.Contract, detail: contract.ContractDetail, client: c}, nil
+		contract := contractDataList[0]
+		return newInstrument(contract, c), nil
 	}
 }
 
-func (c *IBClient) NewInstrumentFromConid(id int) (*Instrument, error) {
+func (c *IBClient) NewInstrumentFromConID(id int) (*Instrument, error) {
 	return c.NewInstrument(Contract{ConID: int64(id)})
 }
 
 func (c *IBClient) USStock(symbol string) (*Instrument, error) {
-	if contract, err := ensureOneContract(c, Contract{Symbol: symbol, SecType: "STK", Currency: "USD", Exchange: "SMART"}); err != nil {
-		return nil, err
-	} else {
-		return &Instrument{contract: contract.Contract, detail: contract.ContractDetail, client: c}, nil
-	}
+	return c.NewInstrument(Contract{Symbol: symbol, SecType: "STK", Currency: "USD", Exchange: "SMART"})
 }
 
 func (c *IBClient) USFuture(symbol string, expiration string) (*Instrument, error) {
-	t := "FUT"
-	e := expiration
-	if expiration == "CONTFUT" || expiration == "" {
-		t = "CONTFUT"
-	}
-	if expiration == "CONTFUT" {
-		e = ""
-	}
 	if to, ok := CommonFutureSymbolMap[symbol]; ok {
 		symbol = to
 	}
-	respCh, _, _ := c.REQ(&ReqContractDetail{Contract{Symbol: symbol, SecType: t, Currency: "USD", LastTradeDateOrContractMonth: e}})
-	cs, err := HandleContractDetail(respCh)
+	var con Contract
+	if expiration == "" {
+		con = Contract{Symbol: symbol, SecType: "CONTFUT", Currency: "USD"}
+	} else {
+		con = Contract{Symbol: symbol, SecType: "FUT", Currency: "USD", LastTradeDateOrContractMonth: expiration}
+	}
+	condatas, err := c.ReqContractDetails(con)
 	if err != nil {
 		return nil, err
 	}
-	if len(cs) == 0 {
-		return nil, fmt.Errorf("ContractData request end unexpected or cancelled by user")
-	}
-	var cdata ContractData
-	if len(cs) == 1 {
-		cdata = cs[0]
-	} else {
-		candidates := make([]*ContractData, 0)
-		for i := range cs {
-			c := cs[i]
-			fmt.Println(candidates)
-			if _, ok := KnowUSFutureExchange[c.Exchange]; ok {
-				candidates = append(candidates, &c)
-			}
-		}
-		if len(candidates) == 1 {
-			cdata = *candidates[0]
-			// fmt.Println(cdata.Contract)
-		} else {
-			return nil, fmt.Errorf("there is ambiguity in the contract defination. Check out the log for detail. Use IBClient.REQ method to find out ConID of the desired contract")
-		}
-	}
-	if cdata.SecType == "CONTFUT" && expiration == "" {
-		cdata.SecType = "FUT"
-	}
-	return &Instrument{contract: cdata.Contract, detail: cdata.ContractDetail, client: c}, nil
-}
-
-func (ins *Instrument) TickStream(typ string) (chan Tick, error) {
-	if typ != "Last" && typ != "AllLast" && typ != "BidAsk" && typ != "MidPoint" {
-		return nil, errors.New("value erro")
-	}
-	msgCh, _, err := ins.client.REQ(ReqTickByTickData{&ins.contract, typ, 0, false})
-	if err != nil {
-		return nil, err
-	}
-	for m := range msgCh {
-		if m.Code == inTICKBYTICK {
-		}
-	}
-	return nil, nil
-}
-func HandleContractDetail(ch chan *Message) ([]ContractData, error) {
-	cs := make([]ContractData, 0)
-	for m := range ch {
-		if m.Error != nil {
-			return nil, m.Error
-		}
-		if m.Code == inCONTRACTDATAEND {
-			return cs, nil
-		}
-		c := ContractData{}
-		c.Read(m)
-		cs = append(cs, c)
-	}
-	return nil, fmt.Errorf("ContractData request end unexpected or cancelled by user")
-}
-
-func ensureOneContract(c *IBClient, ct Contract) (*ContractData, error) {
-	respCh, _, _ := c.REQ(ReqContractDetail{ct})
-	if cs, err := HandleContractDetail(respCh); err != nil {
-		return nil, err
-	} else if len(cs) == 0 {
-		return nil, fmt.Errorf("ContractData request end unexpected or cancelled by user")
-	} else if len(cs) != 1 {
-		var id int64
-		for _, c := range cs {
-			if id != 0 && c.ConID != id {
-				return nil, fmt.Errorf("there is ambiguity in the contract defination. Check out the log for detail. Use IBClient.REQ method to find out ConID of the desired contract")
-			}
-			id = c.ConID
-		}
-		return &cs[0], nil
-	} else {
-		return &cs[0], nil
-	}
-}
-
-func HanddleTickbyTick(ch chan *Message) {
-	var last time.Time
-	var i int
-	for m := range ch {
-		// Printmsg(m)
-		if m.Code != inTICKBYTICK {
-			Printmsg(m)
-			break
-		}
-		t := Tick{}
-		t.Read(m)
-		if t.Time.After(last) {
-			// fmt.Println("after")
-			i = 1
-			last = t.Time
-		} else if t.Time.Before(last) {
-			// fmt.Println("before")
-			// fmt.Println("ERROR!")
-		} else {
-			// fmt.Println("equal", i)
-			t.SetMilli(i)
+	i := 0
+	for _, condata := range condatas {
+		if condata.Exchange != "QBALGO" {
+			condatas[i] = condata
 			i++
 		}
-
-		t.SetRTH()
-		b, err := json.Marshal(&t)
-		if err != nil {
-			panic(err)
-		}
-		fmt.Println(string(b))
 	}
+	condatas = condatas[:i]
+	if len(condatas) == 0 {
+		return nil, fmt.Errorf("ContractData request end unexpected or cancelled by user")
+	}
+	if len(condatas) == 1 {
+		return newInstrument(condatas[0], c), nil
+	} else {
+		return nil, fmt.Errorf("There is ambiguity in the contract defination. Use IBClient.ReqSymbolSample method to look up")
+	}
+}
+
+type TickStream struct {
+	Ticks  chan Tick
+	Cancel func() error
+	Err    error
+}
+
+func (ins *Instrument) TickStream(tickType string) (stream *TickStream, err error) {
+	id, ack, respCh, err := ins.client.reqTicker()
+	if err != nil {
+		return
+	}
+	defer close(ack)
+	w := ins.client.writer
+	w.writeString(outREQTICKBYTICKDATA)
+	w.writeString(id)
+	w.writeContract(&ins.contract)
+	w.writeString(tickType)
+	w.writeInt(0)
+	w.writeBool(false)
+	err = w.send()
+	if err != nil {
+		return
+	}
+	stream = &TickStream{make(chan Tick), nil, nil}
+	stream.Cancel = func() error {
+		return ins.client.reqCancel(outCANCELTICKBYTICKDATA, "", id)
+	}
+	go func() {
+		pending := make([]Tick, 0)
+		var first Tick
+		var update chan Tick
+		var last time.Time
+		i := 1
+		for {
+			if len(pending) > 0 {
+				first = pending[0]
+				update = stream.Ticks
+			}
+			select {
+			case msg := <-respCh:
+				if msg.code[:1] == "E" {
+					close(stream.Ticks)
+					stream.Err = fmt.Errorf("Error%v: %v", msg.code[1:], msg.body)
+					return
+				}
+				t := *(msg.body).(*Tick)
+				if t.Time.After(last) {
+					last = t.Time
+					i = 1
+				} else if t.Time.Before(last) {
+					fmt.Println("ERROR! Tick out of order")
+				} else {
+					if err := t.SetShift(i); err != nil {
+						close(stream.Ticks)
+						stream.Err = err
+					}
+					i++
+				}
+				pending = append(pending, t)
+			case update <- first:
+				pending = pending[1:]
+				update = nil
+			}
+		}
+	}()
+	return
+}
+
+func (ins *Instrument) reqHistorical() {
+	if t := time.Now(); t.Sub(ins.lastHistoricalReq) > time.Millisecond*400 {
+		ins.lastHistoricalReq = t
+		return
+	} else {
+		t = <-time.NewTimer(ins.lastHistoricalReq.Add(time.Millisecond * 400).Sub(t)).C
+		ins.lastHistoricalReq = t
+		return
+	}
+}
+
+func (ins *Instrument) HeadTimeStamp(whatToShow string, useRTH bool) (t time.Time, err error) {
+	id, ack, respCh, err := ins.client.reqTicker()
+	if err != nil {
+		return
+	}
+	defer close(ack)
+	con := ins.contract
+	if con.SecType == "FUT" {
+		con.SecType = "CONTFUT"
+	}
+	w := ins.client.writer
+	w.writeString(outREQHEADTIMESTAMP)
+	w.writeString(id)
+	w.writeContractWithExpired(&con)
+	w.writeBool(useRTH)
+	w.writeString(whatToShow)
+	w.writeInt(1)
+	err = w.send()
+	if err != nil {
+		return
+	}
+	msg := <-respCh
+	str := (msg.body).(string)
+	loc, err := time.LoadLocation(ins.Detail.TimeZoneID)
+	if err != nil {
+		return
+	}
+	t, err = time.ParseInLocation("20060102  15:04:00", str, loc)
+	return
+}
+
+func (ins *Instrument) HistoricalTicks(startDataTime string, endDateTime string, numberOfTicks int64, whatToShow string, useRTH bool) (ticks []Tick, err error) {
+	ins.reqHistorical()
+	<-ins.client.historical
+	id, ack, respCh, err := ins.client.reqTicker()
+	if err != nil {
+		return
+	}
+	defer close(ack)
+	if whatToShow == "BIDASK" {
+		whatToShow = "BID_ASK"
+	}
+	con := ins.contract
+	if con.SecType == "CONTFUT" {
+		con.SecType = "FUT"
+	}
+	w := ins.client.writer
+	w.writeString(outREQHISTORICALTICKS)
+	w.writeString(id)
+	w.writeContractWithExpired(&con)
+	w.writeString(startDataTime)
+	w.writeString(endDateTime)
+	w.writeInt(numberOfTicks)
+	w.writeString(whatToShow)
+	w.writeBool(useRTH)
+	w.writeBool(false)
+	w.writeString("")
+	err = w.send()
+	if err != nil {
+		return
+	}
+	msg := <-respCh
+	if msg.code[:1] == "E" {
+		err = fmt.Errorf("Error%v: %v", msg.code[1:], msg.body)
+		return
+	}
+	ticks = (msg.body).([]Tick)
+	return
+}
+
+func (ins *Instrument) HistoricalBar(endDateTime string, durationStr string, barSize string, whatToShow string, useRTH bool, keepUpToDate bool) (bars []BarData, err error) {
+	ins.reqHistorical()
+	<-ins.client.historical
+	id, ack, respCh, err := ins.client.reqTicker()
+	if err != nil {
+		return
+	}
+	defer close(ack)
+	con := ins.contract
+	if con.SecType == "FUT" {
+		con.SecType = "CONTFUT"
+	}
+	w := ins.client.writer
+	w.writeString(outREQHISTORICALDATA)
+	// v:="6" //serverVersion 124
+	// writeString(w,v) //serverVersion 124
+	w.writeString(id)
+	w.writeContractWithExpired(&con)
+	w.writeString(endDateTime)
+	w.writeString(barSize)
+	w.writeString(durationStr)
+	w.writeBool(useRTH)
+	w.writeString(whatToShow)
+	w.writeInt(1)
+	//TODO BAGS
+	w.writeBool(keepUpToDate) // serverVersion 124
+	w.writeString("")
+	w.send()
+	msg := <-respCh
+	if msg.code[:1] == "E" {
+		err = fmt.Errorf("Error%v: %v", msg.code[1:], msg.body)
+		return
+	}
+	bars = (msg.body).([]BarData)
+	return
 }
 
 var KnowUSFutureExchange = map[string]struct{}{

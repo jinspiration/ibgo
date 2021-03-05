@@ -34,19 +34,19 @@ type ReqMktData struct {
 
 func (req ReqMktData) typ() RequestType { return RequestType{"TICKER", true, "", 3} }
 
-func (req ReqMktData) writeBody(w *bytes.Buffer, id string, serverVersion int64) {
-	v := "11"
-	writeString(w, outREQMKTDATA)
-	writeString(w, v)
-	writeString(w, id)
-	writeContract(w, req.Contract)
-	// TODO combo and deltaneutral
-	writeBool(w, false)
-	writeString(w, req.GenericTickList)
-	writeBool(w, req.Snapshot)
-	writeBool(w, req.RegulatorySnapshot)
-	writeString(w, "")
-}
+// func (req ReqMktData) writeBody(w *bytes.Buffer, id string, serverVersion int64) {
+// 	v := "11"
+// 	writeString(w, outREQMKTDATA)
+// 	writeString(w, v)
+// 	writeString(w, id)
+// 	writeContract(w, req.Contract)
+// 	// TODO combo and deltaneutral
+// 	writeBool(w, false)
+// 	writeString(w, req.GenericTickList)
+// 	writeBool(w, req.Snapshot)
+// 	writeBool(w, req.RegulatorySnapshot)
+// 	writeString(w, "")
+// }
 
 func (req ReqMktData) writeCancel(w *bytes.Buffer, id string) {
 	v := "2"
@@ -64,16 +64,16 @@ type ReqTickByTickData struct {
 
 func (req ReqTickByTickData) typ() RequestType { return RequestType{"TICKER", true, "", 3} }
 
-func (req ReqTickByTickData) writeBody(w *bytes.Buffer, id string, serverVersion int64) {
-	writeString(w, outREQTICKBYTICKDATA)
-	writeString(w, id)
-	writeContract(w, req.Contract)
-	writeString(w, req.TickType)
-	if serverVersion >= vMINSERVERVERTICKBYTICKIGNORESIZE {
-		writeInt(w, req.NumberofTicks)
-		writeBool(w, req.IgnoreSize)
-	}
-}
+// func (req ReqTickByTickData) writeBody(w *bytes.Buffer, id string, serverVersion int64) {
+// 	writeString(w, outREQTICKBYTICKDATA)
+// 	writeString(w, id)
+// 	writeContract(w, req.Contract)
+// 	writeString(w, req.TickType)
+// 	if serverVersion >= vMINSERVERVERTICKBYTICKIGNORESIZE {
+// 		writeInt(w, req.NumberofTicks)
+// 		writeBool(w, req.IgnoreSize)
+// 	}
+// }
 
 func (req ReqTickByTickData) writeCancel(w *bytes.Buffer, id string) {
 	writeString(w, outCANCELTICKBYTICKDATA)
@@ -94,14 +94,14 @@ type ReqHeadTimeStamp struct {
 
 func (req ReqHeadTimeStamp) typ() RequestType { return RequestType{} }
 
-func (req ReqHeadTimeStamp) writeBody(w *bytes.Buffer, id string, serverVersion int64) {
-	writeString(w, outREQHEADTIMESTAMP)
-	writeString(w, id)
-	writeContractWithExpired(w, req.Contract)
-	writeInt(w, req.UseRTH)
-	writeString(w, req.WhatToShow)
-	writeInt(w, req.FormatDate)
-}
+// func (req ReqHeadTimeStamp) writeBody(w *bytes.Buffer, id string, serverVersion int64) {
+// 	writeString(w, outREQHEADTIMESTAMP)
+// 	writeString(w, id)
+// 	writeContractWithExpired(w, req.Contract)
+// 	writeInt(w, req.UseRTH)
+// 	writeString(w, req.WhatToShow)
+// 	writeInt(w, req.FormatDate)
+// }
 
 type ReqContractDetail struct {
 	Contract Contract
@@ -111,13 +111,13 @@ func (req ReqContractDetail) typ() RequestType {
 	return RequestType{"TICKER", true, inCONTRACTDATAEND, 2}
 }
 
-func (req ReqContractDetail) writeBody(w *bytes.Buffer, id string, serverVersion int64) {
-	v := "8"
-	writeString(w, outREQCONTRACTDATA)
-	writeString(w, v)
-	writeString(w, id)
-	writeContractFull(w, &req.Contract)
-}
+// func (req ReqContractDetail) writeBody(w *bytes.Buffer, id string, serverVersion int64) {
+// 	v := "8"
+// 	writeString(w, outREQCONTRACTDATA)
+// 	writeString(w, v)
+// 	writeString(w, id)
+// 	writeContractFull(w, &req.Contract)
+// }
 
 type ReqHistoricalTicks struct {
 	Contract      *Contract
@@ -131,18 +131,18 @@ type ReqHistoricalTicks struct {
 
 func (req ReqHistoricalTicks) typ() RequestType { return RequestType{"HISTORICAL", true, "", 3} }
 
-func (req ReqHistoricalTicks) writeBody(w *bytes.Buffer, id string, serverVersion int64) {
-	writeString(w, outREQHISTORICALTICKS)
-	writeString(w, id)
-	writeContractWithExpired(w, req.Contract)
-	writeString(w, req.StartDateTime)
-	writeString(w, req.EndDateTime)
-	writeInt(w, req.NumberofTicks)
-	writeString(w, req.WhatToShow)
-	writeBool(w, req.UseRTH)
-	writeBool(w, req.IgnoreSize)
-	writeString(w, "")
-}
+// func (req ReqHistoricalTicks) writeBody(w *bytes.Buffer, id string, serverVersion int64) {
+// 	writeString(w, outREQHISTORICALTICKS)
+// 	writeString(w, id)
+// 	writeContractWithExpired(w, req.Contract)
+// 	writeString(w, req.StartDateTime)
+// 	writeString(w, req.EndDateTime)
+// 	writeInt(w, req.NumberofTicks)
+// 	writeString(w, req.WhatToShow)
+// 	writeBool(w, req.UseRTH)
+// 	writeBool(w, req.IgnoreSize)
+// 	writeString(w, "")
+// }
 
 type ReqHistoricalData struct {
 	Contract       *Contract
@@ -156,22 +156,23 @@ type ReqHistoricalData struct {
 }
 
 func (req ReqHistoricalData) typ() RequestType { return RequestType{"HISTORICAL", true, "", 3} }
-func (req ReqHistoricalData) writeBody(w *bytes.Buffer, id string, serverVersion int64) {
-	// v:="6" //serverVersion 124
-	writeString(w, outREQHISTORICALDATA)
-	// writeString(w,v) //serverVersion 124
-	writeString(w, id)
-	writeContractWithExpired(w, req.Contract)
-	writeString(w, req.EndDateTime)
-	writeString(w, req.BarSizeSetting)
-	writeString(w, req.DurationStr)
-	writeInt(w, req.UseRTH)
-	writeString(w, req.WhatToShow)
-	writeInt(w, req.FormatData)
-	//TODO BAGS
-	writeBool(w, req.KeepUpToDate) // serverVersion 124
-	writeString(w, "")
-}
+
+// func (req ReqHistoricalData) writeBody(w *bytes.Buffer, id string, serverVersion int64) {
+// 	// v:="6" //serverVersion 124
+// 	writeString(w, outREQHISTORICALDATA)
+// 	// writeString(w,v) //serverVersion 124
+// 	writeString(w, id)
+// 	writeContractWithExpired(w, req.Contract)
+// 	writeString(w, req.EndDateTime)
+// 	writeString(w, req.BarSizeSetting)
+// 	writeString(w, req.DurationStr)
+// 	writeInt(w, req.UseRTH)
+// 	writeString(w, req.WhatToShow)
+// 	writeInt(w, req.FormatData)
+// 	//TODO BAGS
+// 	writeBool(w, req.KeepUpToDate) // serverVersion 124
+// 	writeString(w, "")
+// }
 
 //static request
 type ReqCurrentTime struct{}

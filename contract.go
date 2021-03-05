@@ -2,7 +2,6 @@ package ibgo
 
 import (
 	"fmt"
-	"strings"
 	"time"
 )
 
@@ -59,6 +58,7 @@ type ContractData struct {
 	Contract
 	ContractDetail
 }
+
 type ContractDetail struct {
 	MarketName         string
 	MinTick            float64
@@ -109,77 +109,21 @@ type BondContractDetail struct {
 	Notes             string
 }
 
-func (c *ContractData) Read(m *Message) {
-	c.Symbol = m.readString()
-	c.SecType = m.readString()
-	readLastTradeDate(m, c)
-	c.Strike = m.readFloat()
-	c.Right = m.readString()
-	c.Exchange = m.readString()
-	c.Currency = m.readString()
-	c.LocalSymbol = m.readString()
-	c.MarketName = m.readString()
-	c.TradingClass = m.readString()
-	c.ConID = m.readInt()
-	c.MinTick = m.readFloat()
-	c.MDSizeMultiplier = m.readInt() //serverVersion 110
-	c.Multiplier = m.readString()
-	c.OrdeTypes = m.readString()
-	c.ValidExchange = m.readString()
-	c.PriceManifier = m.readInt()
-	c.UnderConID = m.readInt()                                              //version 4
-	c.LongName = m.readString()                                             //version 5
-	c.PrimaryExchange = m.readString()                                      //version 5
-	c.ContractMonth = m.readString()                                        //version 6
-	c.Industry = m.readString()                                             //version 6
-	c.Category = m.readString()                                             //version 6
-	c.Subcategory = m.readString()                                          //version 6
-	c.TimeZoneID = m.readString()                                           //version 6
-	c.TradingHours = m.readSessions(ContractDetailTimeLayout, c.TimeZoneID) //version 6
-	c.LiquidHours = m.readSessions(ContractDetailTimeLayout, c.TimeZoneID)  //version 6
-	c.EVRule = m.readString()                                               //version 8
-	c.EVMultiplier = m.readIntUnset()                                       //version 8
-	if n := int(m.readInt()); n > 0 {                                       //version 7
-		c.SecIDList = make([]TagValue, n)
-		for i := 0; i < n; i++ {
-			c.SecIDList[i] = TagValue{Tag: m.readString(), Value: m.readString()}
-		}
-	}
-	c.AggGroup = m.readInt()              //serverVersion 121
-	c.UnderSymbol = m.readString()        //serverVersion 122
-	c.UnderSecType = m.readString()       //serverVersion 122
-	c.MarketRuleIDs = m.readString()      //serverVersion 126
-	c.RealExpirationDate = m.readString() //serverVersion 134
+type ContractDataEnd struct{}
+
+func (c Contract) String() string {
+	return fmt.Sprintf("ID: %d\tSymbol: %s\tSecType: %v\tCurrency: %v\tExchange: %v\tPrimaryExchaneg: %v\tLocalSymbol: %v\tExpire: %v\tMultiplier: %v", c.ConID, c.Symbol, c.SecType, c.Currency, c.Exchange, c.PrimaryExchange, c.LocalSymbol, c.LastTradeDateOrContractMonth, c.Multiplier)
 }
 
-func (c *Contract) String() string {
-	return fmt.Sprintf("ID:%v\tSymbol:%v\tSecType:%v\nCurrency:%v\tExchange:%v\tPrimaryExchaneg:%v\nLocalSymbol:%v\tExpire:%v\tMultiplier:%v\n", c.ConID, c.Symbol, c.SecType, c.Currency, c.Exchange, c.PrimaryExchange, c.LocalSymbol, c.LastTradeDateOrContractMonth, c.Multiplier)
-}
-func (c *ContractData) String() string {
-	return fmt.Sprintf("%v", c.Contract)
-	// return fmt.Sprintf("ID:%v\tSymbol:%v\tSecType:%v\nCurrency:%v\tExchange:%v\tPrimaryExchaneg:%v\nLocalSymbol:%v\tExpire:%v\tMultiplier:%v\n", c.ConID, c.Symbol, c.SecType, c.Currency, c.Exchange, c.PrimaryExchange, c.LocalSymbol, c.LastTradeDateOrContractMonth, c.Multiplier)
+func (c ContractData) String() string {
+	return c.Contract.String()
 }
 
 var ContractDetailTimeLayout = "20060102:1504"
 var HistoricaldataTimeLayout = "20060102 15:04:00"
+var HeadTimeStampTimeLayout = "20060102  15:04:00"
 
 type Session struct {
 	Start time.Time
 	End   time.Time
-}
-
-func (m *Message) readSessions(layout string, zone string) []Session {
-	strs := strings.Split(m.readString(), ";")
-	sessions := make([]Session, len(strs))
-	loc, _ := time.LoadLocation(zone)
-	for i, str := range strs {
-		if s := strings.Split(str, "-"); len(s) == 1 && strings.HasSuffix(s[0], "CLOSED") {
-			sessions[i] = Session{}
-		} else if len(s) == 2 {
-			start, _ := time.ParseInLocation(layout, s[0], loc)
-			end, _ := time.ParseInLocation(layout, s[1], loc)
-			sessions[i] = Session{start, end}
-		}
-	}
-	return sessions
 }
